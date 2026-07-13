@@ -9,7 +9,7 @@ This repo contains examples of two lifecycles that highlight YAML elements from 
 
 The examples lay out a common enterprise-scale pattern in both ADO and GH. This type of pattern is typically employed at organizations where a central team is tasked with ensuring that all automation adheres to corporate Standards and, often, external regulations. This is common in highly regulated industries like Finance and Energy, or any enterprise with rigid governance and compliance requirements for automation. 
 
-Note the following presumptions about the principles we value for this example: 
+Note the following presumptions about the core principles to which these examples strive to adhere: 
 
 - **Do Not Repeat Yourself** - All templates and workflows should be reusable and avoid duplication across environments and repositories.
 
@@ -23,7 +23,7 @@ Note the following presumptions about the principles we value for this example:
 
 - **Parameterization** - Inputs should be parameterized to allow flexibility and reuse across different environments and applications.
 
-A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficult to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers.
+A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficult to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers. So while these examples might be easy for *you* to understand in isolation, try to think about them in the context of a major, Enterprise-scale SDLC - including all the humans involved in keeping such a practice operational.  
 
 ## The GitHub Actions Pattern has Some Challenges
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the principles above and discuss how they manifest with Actions.
