@@ -351,7 +351,9 @@ jobs:
     if: ${{ fromJSON(inputs.environments_json).prod.enabled }}
 ```
 
-Remember that this is a very simple expression of the challenge. Our example pattern lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). Notice how the inline code is repeated. The problems this creates are substantial and meaningful at scale. 
+Remember that this is a very simple expression of the challenge. Even so, we are required to define two separate jobs (`deploy_dev` and `deploy_prod`) with their own inline steps, even though the work is largely similar - and this compounds with every new environment we add. While our example pattern lessens the concern by referencing a Composite Action, this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). 
+
+Here's how that looks in practice. Notice how the inline code is now also repeated - and this is just two environments. The problems this creates are substantial and meaningful at scale. 
 
 **GitHub Pattern Without Composite Action (`deploy-appservices.yml`):**
 ```yaml
