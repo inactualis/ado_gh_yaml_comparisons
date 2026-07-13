@@ -1,10 +1,10 @@
 ### Comparing Azure DevOps and GitHub YAML Constructs
 
-> **TL;DR:** ADO gives native Stages + Control Loops + structured Object parameters; GitHub can approximate these features with JSON, matrices, and Composite Actions, but usually with more complexity and duplication.
+> **TL;DR:** ADO gives native Stages + template-time loop patterns (built with `each` + `if`) + structured Object parameters; GitHub can approximate these features with JSON, matrices, and Composite Actions, but usually with more complexity and duplication.
 
 This repo contains examples of two lifecycles that highlight YAML elements from Azure DevOps (ADO) that are not yet present in GitHub (GH) Actions, namely:
 - Stages
-- Control loops (`each` and `if` template expressions)
+- Template-time loop patterns (built with `each` and `if` template expressions)
 - Object Parameters
 
 The examples lay out a common enterprise-scale pattern in both ADO and GH. This type of pattern is typically employed at organizations where a central team is tasked with ensuring that all automation adheres to corporate Standards and, often, external regulations. This is common in highly regulated industries like Finance and Energy, or any enterprise with rigid governance and compliance requirements for automation. 
@@ -259,9 +259,9 @@ jobs:
         }
 ```
 
-### GitHub Actions Lack ADO-Style Template-Time Control Loops
+### GitHub Actions Lack ADO-Style Template-Time Loop Patterns
 
-Azure DevOps supports template-time control loops (`each`) and conditional blocks (`if`) directly in YAML templates. That lets one template scale across many environments and app services without duplicating job definitions.
+Azure DevOps supports template-time loop patterns built with iteration (`each`) and conditional blocks (`if`) directly in YAML templates. That lets one template scale across many environments and app services without duplicating job definitions.
 
 GitHub Actions does not have an equivalent template-time loop model inside workflow YAML. The practical impacts are:
 
@@ -270,7 +270,7 @@ GitHub Actions does not have an equivalent template-time loop model inside workf
 - **Less expressive hierarchy**: nested loop patterns (environment → app service) are less natural and often require JSON parsing, matrices, or inline script.
 - **Dependency complexity**: per-environment ordering and per-app fan-out/fan-in are more manual than ADO template expansion.
 
-**Azure DevOps control loops (`azure-appservice-deploy-stages.yml`) — native nested loops:**
+**Azure DevOps template-time loop patterns (`azure-appservice-deploy-stages.yml`) — native nested loops:**
 
 ```yaml
 stages:
