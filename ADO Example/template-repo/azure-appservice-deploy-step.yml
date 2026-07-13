@@ -1,0 +1,22 @@
+parameters:
+  - name: azureServiceConnection
+    type: string
+
+  - name: appName
+    type: string
+
+  - name: packagePath
+    type: string
+
+  - name: deploymentMethod
+    type: string
+    default: zipDeploy
+
+steps:
+  - task: AzureWebApp@1
+    displayName: Deploy package to ${{ parameters.appName }}
+    inputs:
+      azureSubscription: ${{ parameters.azureServiceConnection }}
+      appName: ${{ parameters.appName }}
+      package: ${{ parameters.packagePath }}
+      deploymentMethod: ${{ parameters.deploymentMethod }}

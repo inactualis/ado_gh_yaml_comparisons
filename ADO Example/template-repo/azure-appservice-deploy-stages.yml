@@ -1,0 +1,73 @@
+parameters:
+  - name: artifactName
+    type: string
+    default: drop
+    displayName: Artifact name to download
+
+  - name: packagePath
+    type: string
+    default: '$(Pipeline.Workspace)/drop/app.zip'
+    displayName: Path to the deployment package inside the artifact
+
+  - name: vmImage
+    type: string
+    default: ubuntu-latest
+    displayName: Build agent image
+
+  - name: stepTemplate
+    type: string
+    default: azure-appservice-deploy-step.yml
+    displayName: Nested step template used for the deploy action
+
+  - name: environments
+    type: object
+    default:
+      - name: dev
+        displayName: Development
+        isProd: false
+        dependsOn: []
+        azureServiceConnection: sc-azure-dev
+        environmentResource: dev
+        appServices:
+          - name: someapp-web-dev-01
+          - name: someapp-web-dev-02
+      - name: prod
+        displayName: Production
+        isProd: true
+        dependsOn:
+          - Deploy_dev
+        azureServiceConnection: sc-azure-prod
+        environmentResource: prod
+        appServices:
+          - name: someapp-web-prod-01
+          - name: someapp-web-prod-02
+
+stages:
+  - ${{ each env in parameters.environments }}:
+      - stage: Deploy_${{ replace(env.name, '-', '_') }}
+        displayName: Deploy ${{ env.displayName }}
+        dependsOn: ${{ env.dependsOn }}
+        condition: succeeded()
+        jobs:
+          - ${{ each appService in env.appServices }}:
+              - deployment: Deploy_${{ replace(appService.name, '-', '_') }}
+                displayName: Deploy ${{ appService.name }}
+                environment: ${{ env.environmentResource }}
+                pool:
+                  vmImage: ${{ parameters.vmImage }}
+                strategy:
+                  runOnce:
+                    deploy:
+                      steps:
+                        - download: current
+                          artifact: ${{ parameters.artifactName }}
+
+                        - template: ${{ parameters.stepTemplate }}
+                          parameters:
+                            azureServiceConnection: ${{ env.azureServiceConnection }}
+                            appName: ${{ appService.name }}
+                            packagePath: ${{ parameters.packagePath }}
+                            ${{ if eq(env.isProd, true) }}:
+                              deploymentMethod: runFromPackage
+                            ${{ if ne(env.isProd, true) }}:
+                              deploymentMethod: zipDeploy

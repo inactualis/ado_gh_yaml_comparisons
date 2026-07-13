@@ -1,0 +1,107 @@
+name: Deploy App Services
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: Artifact to download
+        required: false
+        type: string
+        default: drop
+
+      artifact_path:
+        description: Folder where the artifact is downloaded
+        required: false
+        type: string
+        default: artifact
+
+      package_path:
+        description: Package path inside the downloaded artifact
+        required: false
+        type: string
+        default: app.zip
+
+      vm_image:
+        description: Build agent image
+        required: false
+        type: string
+        default: ubuntu-latest
+
+      environments_json:
+        description: JSON object containing the full lifecycle environment definitions
+        required: true
+        type: string
+
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy_dev:
+    name: Deploy Development
+    runs-on: ${{ inputs.vm_image }}
+    if: ${{ fromJSON(inputs.environments_json).dev.enabled }}
+    environment: ${{ fromJSON(inputs.environments_json).dev.environment_resource }}
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.artifact_path }}
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy development app services
+        uses: ./.github/actions/deploy-appservices
+        with:
+          environment_name: dev
+          is_prod: ${{ fromJSON(inputs.environments_json).dev.is_prod }}
+          resource_group: ${{ fromJSON(inputs.environments_json).dev.resource_group }}
+          artifact_path: ${{ inputs.artifact_path }}
+          package_path: ${{ inputs.package_path }}
+          app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).dev.app_services) }}
+
+  deploy_prod:
+    name: Deploy Production
+    runs-on: ${{ inputs.vm_image }}
+    needs: deploy_dev
+    if: ${{ fromJSON(inputs.environments_json).prod.enabled }}
+    environment: ${{ fromJSON(inputs.environments_json).prod.environment_resource }}
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.artifact_path }}
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy production app services
+        uses: ./.github/actions/deploy-appservices
+        with:
+          environment_name: prod
+          is_prod: ${{ fromJSON(inputs.environments_json).prod.is_prod }}
+          resource_group: ${{ fromJSON(inputs.environments_json).prod.resource_group }}
+          artifact_path: ${{ inputs.artifact_path }}
+          package_path: ${{ inputs.package_path }}
+          app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).prod.app_services) }}

@@ -1,0 +1,44 @@
+name: Deploy App Team
+
+on:
+  workflow_dispatch:
+
+# Consumer workflow example for an app team's repository.
+# This points to a shared workflows repository, similar to ADO resources.repositories + template.
+
+jobs:
+  deploy:
+    name: Deploy App Lifecycle
+    uses: your-org/shared-workflows/.github/workflows/deploy-appservices.yml@main
+    with:
+      artifact_name: drop
+      artifact_path: artifact
+      package_path: app.zip
+      vm_image: ubuntu-latest
+      environments_json: |
+        {
+          "dev": {
+            "display_name": "Development",
+            "enabled": true,
+            "is_prod": false,
+            "resource_group": "rg-someapp-dev",
+            "environment_resource": "dev",
+            "app_services": [
+              { "name": "someapp-web-dev-01" },
+              { "name": "someapp-web-dev-02" }
+            ]
+          },
+          "prod": {
+            "display_name": "Production",
+            "enabled": true,
+            "is_prod": true,
+            "resource_group": "rg-someapp-prod",
+            "environment_resource": "prod",
+            "depends_on": ["deploy_dev"],
+            "app_services": [
+              { "name": "someapp-web-prod-01" },
+              { "name": "someapp-web-prod-02" }
+            ]
+          }
+        }
+    secrets: inherit

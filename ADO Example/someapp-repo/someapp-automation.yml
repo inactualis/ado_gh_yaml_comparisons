@@ -1,0 +1,39 @@
+trigger: none
+pr: none
+
+# Example consumer pipeline that lives in an individual app repo (`someapp-repo`).
+# It references a shared template repo (`template-repo`) like any external ADO repo reference.
+
+resources:
+  repositories:
+    - repository: templatesRepo
+      type: git
+      name: SharedPipelines/template-repo
+      ref: refs/heads/main
+
+stages:
+  - template: azure-appservice-deploy-stages.yml@templatesRepo
+    parameters:
+      artifactName: drop
+      packagePath: '$(Pipeline.Workspace)/drop/app.zip'
+      vmImage: ubuntu-latest
+      environments:
+        - name: dev
+          displayName: Development
+          isProd: false
+          dependsOn: []
+          azureServiceConnection: sc-azure-dev
+          environmentResource: dev
+          appServices:
+            - name: someapp-web-dev-01
+            - name: someapp-web-dev-02
+        - name: prod
+          displayName: Production
+          isProd: true
+          dependsOn:
+            - Deploy_dev
+          azureServiceConnection: sc-azure-prod
+          environmentResource: prod
+          appServices:
+            - name: someapp-web-prod-01
+            - name: someapp-web-prod-02
