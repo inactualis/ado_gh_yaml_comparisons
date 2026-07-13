@@ -4,7 +4,7 @@
 
 This repo contains examples of two lifecycles that highlight YAML elements from Azure DevOps (ADO) that are not yet present in GitHub (GH) Actions, namely:
 - Stages
-- Control loops (foreach and forif)
+- Control loops (`each` and `if` template expressions)
 - Object Parameters
 
 The examples lay out a common enterprise-scale pattern in both ADO and GH. This type of pattern is typically employed at organizations where a central team is tasked with ensuring that all automation adheres to corporate Standards and, often, external regulations. This is common in highly regulated industries like Finance and Energy, or any enterprise with rigid governance and compliance requirements for automation. 
@@ -23,10 +23,10 @@ Note the following presumptions about the principles we value for this example:
 
 - **Parameterization** - Inputs should be parameterized to allow flexibility and reuse across different environments and applications.
 
-A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficultlt to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers.
+A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficult to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers.
 
 ## The GitHub Actions Pattern has Some Challenges
-The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the priniciples above and discuss how they manifest with Actions.
+The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the principles above and discuss how they manifest with Actions.
 
 ### GH Actions Often Require JSON
 Let's start by comparing the smallest elements in each lifecycle: the GH Composite Action (action.yaml) versus the ADO step template (azure-appservice-deploy-step.yml). The first thing to notice is that the ADO step template can directly reference environment parameters and other context, whereas the GH Reusable Workflow and Composite Action rely on serialized JSON payloads and runtime extraction. While this may look manageable in this simple example, the human readability of the GH file quickly degrades as the complexity of the environment and the number of parameters increase. Simply put, JSON in YAML (GH) is more complex than just YAML (ADO). 
@@ -155,11 +155,11 @@ runs:
           fi
         done
 ```
-### GitHub Actions Lack the Object Parameter Model ###
+### GitHub Actions Lack the Object Parameter Model
 
 In Azure DevOps, templates can accept structured Object parameters that allow direct access to nested properties. GitHub Actions does not support Object parameters in the same way; instead, JSON strings are passed and parsed at runtime. This adds verbosity and can increase maintenance overhead, because authors must manage JSON serialization/deserialization and expression paths in addition to deployment logic.
 
-Let's compare azure-appsevice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
+Let's compare azure-appservice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
 
 ```yaml
 parameters:
@@ -198,7 +198,7 @@ jobs:
           resource_group: ${{ fromJSON(inputs.environments_json).dev.resource_group }}
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).dev.app_services) }}
 ```
-If we go one level higher, we see how the consumer workflows are impacted by this difference. Github must pass JSON strings to the Reusable Workflow, which then parses those strings at runtime to access environment-specific properties. The need for inline json here again leads to more verbose and difficult to maintain YAML at every level in our template stack. And remember that we are looking at the simplest example: this issue compounds with the complexity of the lifecycle. 
+If we go one level higher, we see how the consumer workflows are impacted by this difference. GitHub must pass JSON strings to the Reusable Workflow, which then parses those strings at runtime to access environment-specific properties. The need for inline JSON here again leads to more verbose and difficult to maintain YAML at every level in our template stack. And remember that we are looking at the simplest example: this issue compounds with the complexity of the lifecycle. 
 
 This contrasts with Azure DevOps, where the object parameter allows direct access to nested properties without runtime parsing. The Object is much easier for humans to read and write, while JSON requires careful formatting and diligence to maintain. 
 
@@ -259,7 +259,7 @@ jobs:
         }
 ```
 
-### GitHub Actions Lack ADO-Style Template-Time Control Loops ###
+### GitHub Actions Lack ADO-Style Template-Time Control Loops
 
 Azure DevOps supports template-time control loops (`each`) and conditional blocks (`if`) directly in YAML templates. That lets one template scale across many environments and app services without duplicating job definitions.
 
@@ -324,7 +324,7 @@ prod-* depends on all test-*
 - **Matrices are a good fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
 - **But they're a bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. 
 
-Consider the complexity of this basic example that attempts to implement environment promotion order using a matrix; this would be a single "dependson" property in the object we pass to our ADO Stages model. In GH, it would be more readable with independent jobs and explicit `needs` relationships: 
+Consider the complexity of this basic example that attempts to implement environment promotion order using a matrix; this would be a single `dependsOn` property in the object we pass to our ADO Stages model. In GH, it would be more readable with independent jobs and explicit `needs` relationships: 
 
 **Example of matrix complexity shifting into conditions + JSON lookups:**
 
@@ -357,7 +357,7 @@ What's worse, this overly complex snippet will not actually work for true gated 
 
 In practice, this means `dev`, `test`, and `prod` matrix rows may still be scheduled as peers, and environment/branch checks only gate individual rows, not stage-to-stage progression. Again, to enforce strict promotion (`dev -> test -> prod`), you need separate jobs with explicit `needs` relationships, optionally with a matrix inside each environment job for fan-out.
 
-### GitHub Actions Lack the Stages Construct ###
+### GitHub Actions Lack the Stages Construct
 
 In Azure DevOps, Stages provide a natural way to sequence deployments across environments (e.g., dev → prod) and manage dependencies. We define a Stage once, use our Object type parameter to control which environments are included, and then iterate over that as many times as needed. And since the Object parameter type is structured, we can easily access environment-specific properties (like `dependsOn`, `isProd`, etc.) within the stage definition.
 
@@ -371,7 +371,8 @@ stages:
       - stage: ${{ env.stageName }}
         dependsOn: ${{ env.dependsOn }}
         jobs:
-          - deployment: ${{ appService.deploymentName }}
+          - ${{ each appService in env.appServices }}:
+              - deployment: ${{ appService.deploymentName }}
 ```
 
 **GitHub Actions (`deploy-appservices.yml`) — job sequencing with `needs`:**
@@ -386,7 +387,7 @@ jobs:
     if: ${{ fromJSON(inputs.environments_json).prod.enabled }}
 ```
 
-Again, remember that this is a very simple example of the challenge. The example above lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). Notice how the inline code is not repeated. The problems this creates are substantial and meaningul at scale. 
+Again, remember that this is a very simple example of the challenge. The example above lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). Notice how the inline code is repeated. The problems this creates are substantial and meaningful at scale. 
 
 **GitHub Pattern Without Composite Action (`deploy-appservices.yml`):**
 ```yaml
@@ -459,7 +460,7 @@ jobs:
 
 
 
-##  Reference ##
+## Reference
 
 ### Official documentation
 
