@@ -1,43 +1,43 @@
 # ADO Example
 
-This folder demonstrates a DRY Azure DevOps deployment lifecycle for Azure App Service using **separate app and template repos**.
+This folder demonstrates a DRY Azure DevOps deployment lifecycle for Azure App Service using separate app and template repos.
 
-## Repository-style layout in this example
+## Repository-style layout
 
-- `someapp-repo/` — represents an app team's repo
-- `template-repo/` — represents a shared template repo
+- `someapp-repo/` — app team consumer repo example
+- `template-repo/` — shared template repo example
 
-## File overview
+## Files
 
-- `someapp-repo/azure-pipelines.yml`  
-  Consumer pipeline (what an app team keeps in their own repo). It references the shared template repo and passes environment-specific parameters.
+- `someapp-repo/someapp-automation.yml`  
+  Consumer pipeline that lives in the app repo. It imports the shared stage template via `resources.repositories` and passes lifecycle parameters.
 
 - `template-repo/azure-appservice-deploy-stages.yml`  
-  Stage template that defines the deployment lifecycle. It loops through environments, then loops through each app service in each environment.
+  Reusable stage template. It loops through environments, then loops through app services within each environment.
 
 - `template-repo/azure-appservice-deploy-step.yml`  
-  Nested step template that contains the single `AzureWebApp@1` task. This keeps task usage centralized and avoids duplicate task definitions in the parent template.
+  Nested step template containing the single `AzureWebApp@1` task.
 
-## How the lifecycle works
+## How it works
 
-1. `someapp-repo/azure-pipelines.yml` imports the stage template from the shared template repo alias (`templatesRepo`).
-2. The stage template iterates through `environments` (for example: `dev`, `prod`).
-3. For each environment, it creates deployment jobs for each app service listed in `appServices`.
-4. Each deployment job calls the nested step template exactly once.
-5. The nested step template runs `AzureWebApp@1` with the deployment method selected by environment type:
-   - non-prod -> `zipDeploy`
-   - prod -> `runFromPackage`
+1. `someapp-repo/someapp-automation.yml` references the shared repo alias (`templatesRepo`) and calls `azure-appservice-deploy-stages.yml@templatesRepo`.
+2. The stage template iterates over `parameters.environments`.
+3. For each environment, it creates a `Deploy_<env>` stage and deployment jobs per app service.
+4. Each deployment job calls the nested step template.
+5. The nested step template runs `AzureWebApp@1` using:
+   - non-prod: `zipDeploy`
+   - prod: `runFromPackage`
 
 ## Parameter model
 
-The caller pipeline provides these key values:
+The caller passes:
 
-- `artifactName`: artifact to download (default example: `drop`)
-- `packagePath`: package location in the artifact (default example: `$(Pipeline.Workspace)/drop/app.zip`)
-- `vmImage`: agent image (default example: `ubuntu-latest`)
-- `environments`: object array defining lifecycle stages and app-service targets
+- `artifactName` (default: `drop`)
+- `packagePath` (default: `$(Pipeline.Workspace)/drop/app.zip`)
+- `vmImage` (default: `ubuntu-latest`)
+- `environments` (object array of lifecycle stages)
 
-Each environment entry contains:
+Each environment object includes:
 
 - `name`
 - `displayName`
@@ -45,20 +45,17 @@ Each environment entry contains:
 - `dependsOn`
 - `azureServiceConnection`
 - `environmentResource`
-- `appServices` (array of app names)
+- `appServices` (array of `{ name }`)
 
-## Why this structure
+## Notes
 
-- Keeps lifecycle logic DRY
-- Supports multiple environments and multiple app services
-- Preserves clear prod vs non-prod behavior
-- Centralizes the deploy task in one nested file for easier maintenance
+- The sample consumer file currently uses `trigger: none` and `pr: none`.
+- Stage sequencing is controlled per environment through `dependsOn`.
+- This structure keeps deploy task behavior centralized and easy to maintain.
 
 ## Adopting this pattern
 
-For a new app team repo:
-
-1. Copy/adapt `someapp-repo/azure-pipelines.yml`.
+1. Copy/adapt `someapp-repo/someapp-automation.yml` in each app repo.
 2. Point `resources.repositories.name` to your shared template repo.
-3. Set service connections and app names for your environments.
-4. Keep the reusable templates in the shared repo (for this example: `template-repo/`).
+3. Define your environment entries (`dev`, `prod`, etc.) and app service names.
+4. Keep reusable templates centralized in the shared repo.

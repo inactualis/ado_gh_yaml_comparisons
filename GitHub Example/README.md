@@ -2,34 +2,66 @@
 
 This folder mirrors the ADO lifecycle using GitHub Actions building blocks.
 
-The GitHub Actions example is shown here as a caller workflow plus reusable pieces so it’s easy to compare with the ADO example.
+It includes all three layers:
 
-The lifecycle maps the same way:
-
-- a calling workflow, similar to `azure-pipelines.yml`
-- a reusable workflow, called by the app team’s workflow
-- a composite action, called by the reusable workflow
-- dev then prod sequencing with `needs`
-- JSON-driven dev/prod object input instead of ADO-style object parameters
+- caller workflow in an app repo
+- reusable workflow
+- composite action
 
 ## Files
 
-- `someapp-repo/azure-pipelines.yml` — **consumer workflow template** in an app repo (named to mirror the ADO example)
-- `.github/workflows/deploy-appservices.yml` — reusable workflow hosted in the shared workflows repo
-- `.github/actions/deploy-appservices/action.yml` — composite action used by the reusable workflow
+- `someapp-repo/someapp-automation.yml`  
+  Consumer workflow in an app team's repo. It calls a reusable workflow with `uses:` and passes lifecycle inputs, including `environments_json`.
 
-## Notes
+- `.github/workflows/deploy-appservices.yml`  
+  Reusable workflow invoked via `workflow_call`. It defines required Azure OIDC secrets, then runs `deploy_dev` and `deploy_prod` jobs.
 
-This mirrors the ADO model closely:
+- `.github/actions/deploy-appservices/action.yml`  
+  Composite action that loops through app services and deploys each app using Azure CLI.
 
-- ADO app repo: `azure-pipelines.yml` references shared templates via `resources.repositories`
-- GitHub app repo: `someapp-repo/azure-pipelines.yml` (example file name for parity) references shared workflows via `uses: org/repo/.github/workflows/file.yml@ref`
+## Lifecycle behavior
 
-How teams use this:
+1. `someapp-repo/someapp-automation.yml` calls the reusable workflow.
+2. Reusable workflow reads `environments_json` and conditionally runs:
+   - `deploy_dev`
+   - `deploy_prod` (with `needs: deploy_dev`)
+3. Each job downloads artifact, logs into Azure with OIDC (`azure/login@v2`), and calls the composite action.
+4. The composite action deploys each app service from JSON input:
+   - non-prod uses `az webapp deployment source config-zip`
+   - prod uses `az webapp deploy --type zip`
 
-1. Keep the reusable workflow + composite action in a shared workflows repo.
-2. Copy `someapp-repo/azure-pipelines.yml` into each app repo (or rename as desired).
-3. Update only:
-	- `uses:` repository and ref (branch/tag)
-	- environment/app-service JSON values
-	- secrets configuration
+## Input model
+
+Caller workflow provides:
+
+- `artifact_name`
+- `artifact_path`
+- `package_path`
+- `vm_image`
+- `environments_json`
+
+`environments_json` contains objects such as `dev` and `prod`, each with:
+
+- `display_name`
+- `enabled`
+- `is_prod`
+- `resource_group`
+- `environment_resource`
+- optional `depends_on`
+- `app_services` (array of `{ "name": "..." }`)
+
+## Required secrets
+
+The reusable workflow expects:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+
+The sample consumer workflow uses `secrets: inherit`.
+
+## ADO parity notes
+
+- ADO uses object parameters and template expansion loops.
+- GitHub example uses JSON input parsed at runtime (`fromJSON(...)`).
+- Both preserve the same dev → prod lifecycle and multi-app-service deploy pattern.
