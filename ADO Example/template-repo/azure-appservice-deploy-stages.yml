@@ -23,6 +23,7 @@ parameters:
     type: object
     default:
       - name: dev
+        stageName: Deploy_dev
         displayName: Development
         isProd: false
         dependsOn: []
@@ -30,8 +31,11 @@ parameters:
         environmentResource: dev
         appServices:
           - name: someapp-web-dev-01
+            deploymentName: Deploy_someapp_web_dev_01
           - name: someapp-web-dev-02
+            deploymentName: Deploy_someapp_web_dev_02
       - name: prod
+        stageName: Deploy_prod
         displayName: Production
         isProd: true
         dependsOn:
@@ -40,17 +44,19 @@ parameters:
         environmentResource: prod
         appServices:
           - name: someapp-web-prod-01
+            deploymentName: Deploy_someapp_web_prod_01
           - name: someapp-web-prod-02
+            deploymentName: Deploy_someapp_web_prod_02
 
 stages:
   - ${{ each env in parameters.environments }}:
-      - stage: Deploy_${{ replace(env.name, '-', '_') }}
+      - stage: ${{ env.stageName }}
         displayName: Deploy ${{ env.displayName }}
         dependsOn: ${{ env.dependsOn }}
         condition: succeeded()
         jobs:
           - ${{ each appService in env.appServices }}:
-              - deployment: Deploy_${{ replace(appService.name, '-', '_') }}
+              - deployment: ${{ appService.deploymentName }}
                 displayName: Deploy ${{ appService.name }}
                 environment: ${{ env.environmentResource }}
                 pool:

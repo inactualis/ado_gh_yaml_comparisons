@@ -19,6 +19,7 @@ stages:
       vmImage: ubuntu-latest
       environments:
         - name: dev
+          stageName: Deploy_dev
           displayName: Development
           isProd: false
           dependsOn: []
@@ -26,8 +27,11 @@ stages:
           environmentResource: dev
           appServices:
             - name: someapp-web-dev-01
+              deploymentName: Deploy_someapp_web_dev_01
             - name: someapp-web-dev-02
+              deploymentName: Deploy_someapp_web_dev_02
         - name: prod
+          stageName: Deploy_prod
           displayName: Production
           isProd: true
           dependsOn:
@@ -36,4 +40,6 @@ stages:
           environmentResource: prod
           appServices:
             - name: someapp-web-prod-01
+              deploymentName: Deploy_someapp_web_prod_01
             - name: someapp-web-prod-02
+              deploymentName: Deploy_someapp_web_prod_02
