@@ -50,6 +50,8 @@ Caller workflow provides:
 - optional `depends_on`
 - `app_services` (array of `{ "name": "..." }`)
 
+> Note: in this current sample implementation, `depends_on` may be included in the payload for parity/context, but job ordering is defined directly in workflow YAML with `needs` (for example, `deploy_prod` needs `deploy_dev`).
+
 ## Required secrets
 
 The Reusable Workflow expects:

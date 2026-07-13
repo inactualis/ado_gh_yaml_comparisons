@@ -22,7 +22,7 @@ This folder demonstrates a DRY Azure DevOps deployment lifecycle for Azure App S
 
 1. `someapp-repo/someapp-automation.yml` references the shared repo alias (`templatesRepo`) and calls `azure-appservice-deploy-stages.yml@templatesRepo`.
 2. The stage template iterates over `parameters.environments`.
-3. For each environment, it creates a `Deploy_<env>` stage and deployment jobs per app service.
+3. For each environment, it creates a stage using `stageName` and deployment jobs per app service.
 4. Each deployment job calls the nested step template.
 5. The nested step template runs `AzureWebApp@1` using:
    - non-prod: `zipDeploy`
@@ -40,12 +40,13 @@ The caller passes:
 Each environment object includes:
 
 - `name`
+- `stageName`
 - `displayName`
 - `isProd`
 - `dependsOn`
 - `azureServiceConnection`
 - `environmentResource`
-- `appServices` (array of `{ name }`)
+- `appServices` (array of `{ name, deploymentName }`)
 
 ## Notes
 
