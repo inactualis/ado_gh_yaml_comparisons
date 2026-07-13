@@ -25,7 +25,7 @@ Note the following presumptions about the principles we value for this example:
 
 A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficultlt to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers.
 
-## The with GitHub Actions Pattern has Some Challenges
+## The GitHub Actions Pattern has Some Challenges
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the priniciples above and discuss how they manifest with Actions.
 
 ### GH Actions Often Require JSON
@@ -107,6 +107,18 @@ steps:
 
 ```yaml
 inputs:
+  environment_name:
+    required: true
+  is_prod:
+    required: true
+  resource_group:
+    required: true
+  artifact_path:
+    required: false
+    default: artifact
+  package_path:
+    required: false
+    default: app.zip
   app_services_json:
     required: true
 
@@ -115,11 +127,32 @@ runs:
   steps:
     - shell: bash
       env:
+        ENVIRONMENT_NAME: ${{ inputs.environment_name }}
+        IS_PROD: ${{ inputs.is_prod }}
+        RESOURCE_GROUP: ${{ inputs.resource_group }}
+        ARTIFACT_PATH: ${{ inputs.artifact_path }}
+        PACKAGE_PATH: ${{ inputs.package_path }}
         APP_SERVICES_JSON: ${{ inputs.app_services_json }}
       run: |
+        set -euo pipefail
+        package_file="${ARTIFACT_PATH}/${PACKAGE_PATH}"
+        echo "Deploying to ${ENVIRONMENT_NAME} using package ${package_file}"
+
         echo "${APP_SERVICES_JSON}" | jq -c '.[]' | while read -r service; do
           app_name="$(echo "${service}" | jq -r '.name')"
-          echo "Deploying ${app_name}"
+          if [ "${IS_PROD}" = "true" ]; then
+            az webapp deploy \
+              --resource-group "${RESOURCE_GROUP}" \
+              --name "${app_name}" \
+              --src-path "${package_file}" \
+              --type zip \
+              --async false
+          else
+            az webapp deployment source config-zip \
+              --resource-group "${RESOURCE_GROUP}" \
+              --name "${app_name}" \
+              --src "${package_file}"
+          fi
         done
 ```
 ### GitHub Actions Lack the Object Parameter Model ###
