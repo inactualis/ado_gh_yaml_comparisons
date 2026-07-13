@@ -152,7 +152,7 @@ runs:
 ```
 ### GitHub Actions Lack the Object Parameter Model
 
-The previous section showed this at the reusable-orchestrator layer. Here we focus specifically on the **consumer (caller) layer**. Azure DevOps callers can pass a structured YAML object directly into the stage template, while GitHub callers in this pattern pass serialized JSON into the reusable workflow. That extra serialization/parsing step increases verbosity and maintenance burden as lifecycle complexity grows.
+The previous section showed this at the reusable-orchestrator layer. Here we focus specifically on the consumer (or caller) layer. Azure DevOps callers can pass a structured YAML object directly into the stage template, while GitHub callers in this pattern pass serialized JSON into the Reusable Workflow. That extra serialization/parsing step increases verbosity and maintenance burden as lifecycle complexity grows.
 
 **Azure DevOps consumer (`someapp-automation.yml`) — passes structured object directly:**
 
@@ -230,7 +230,7 @@ Azure DevOps supports template-time loop patterns built with iteration (`each`) 
 GitHub Actions does not have an equivalent template-time loop model inside workflow YAML. The practical impacts are:
 
 - **More duplication**: environment jobs are often repeated with only small differences.
-- **Harder maintenance**: changes to shared logic must be made in multiple places unless moved into a Composite Action or reusable workflow.
+- **Harder maintenance**: changes to shared logic must be made in multiple places unless moved into a Composite Action.
 - **Less expressive hierarchy**: nested loop patterns (environment → app service) are less natural and often require JSON parsing, matrices, or inline script.
 - **Dependency complexity**: per-environment ordering and per-app fan-out/fan-in are more manual than ADO template expansion.
 
@@ -280,10 +280,10 @@ jobs:
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json)[matrix.environment].app_services) }}
 ```
 
-Also notice that the GH matrix approach is often less suitable where strict promotion order and environment-specific controls are required. In many implementations, teams end up with multiple, duplicative matrices, where each matrix row becomes a sibling job instance. In practice, you generally can’t rely on a single matrix to define per-row dependencies like:
+Also notice that the GH matrix approach is often less suitable where strict promotion order and environment-specific controls are required. In many implementations, teams end up with multiple, duplicative matrices, where each matrix row becomes a sibling job instance. In practice, you generally can’t rely on a single matrix to define per-row dependencies such as:
 
-test-* depends on all dev-*
-prod-* depends on all test-*
+- `test-*` depends on all `dev-*`
+- `prod-*` depends on all `test-*`
 
 - **Matrices are a good fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
 - **But they're a bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. 
