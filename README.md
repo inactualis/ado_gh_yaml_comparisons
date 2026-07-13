@@ -76,9 +76,11 @@ jobs:
 ```
 
 ### GH Actions Require Inline Code
-Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. Again, this is a very simple example that will spiral into complex and hard-to-maintain scripts as the number of app services and deployment logic grows.
+Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
 
-In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
+Again, this is a very simple example that will spiral into complex and hard-to-maintain scripts as the number of app services and deployment logic grows.
+
+
 
 **ADO nested step template (`azure-appservice-deploy-step.yml`) — no inline loop/script required:**
 
@@ -124,7 +126,9 @@ runs:
 ```
 ### GitHub Actions Lacks the Object Parameter Model ###
 
-In Azure DevOps, templates can accept structured Object parameters that allow direct access to nested properties. GitHub Actions does not support Object parameters in the same way; instead, JSON strings are passed and parsed at runtime using `fromJSON(...)` as shown in the examples above. Let's compare azure-appsevice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
+In Azure DevOps, templates can accept structured Object parameters that allow direct access to nested properties. GitHub Actions does not support Object parameters in the same way; instead, JSON strings are passed and parsed at runtime using `fromJSON(...)`. This adds verbosity and can increase maintenance overhead, because authors must manage JSON serialization/deserialization and expression paths in addition to deployment logic.
+
+Let's compare azure-appsevice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
 
 **Azure DevOps (`azure-appservice-deploy-stages.yml`) — native object parameter:**
 
@@ -281,15 +285,15 @@ jobs:
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json)[matrix.environment].app_services) }}
 ```
 
-Is the GH matrix construct a good alternative? Sometimes, but typically not at enterprise-scale, where strict promotion order and environment-specific controls are required. You must reposrt to multuple, duplicative matrices, where each matrix row becomes a sibling job instance. You can’t rely on a single matrix todefine per-row dependencies like:
+Also notice that the GH matrix approach is typically not useful where strict promotion order and environment-specific controls are required. You must resort to multiple, duplicative matrices, where each matrix row becomes a sibling job instance. You can’t rely on a single matrix to define per-row dependencies like:
 
 test-* depends on all dev-*
 prod-* depends on all test-*
 
-- **Good fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
-- **Bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. 
+- **Matrices are a fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
+- **But they're a bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. 
 
-Consider the complexity of this basic example that attempts to implement environment promotion order using a matrix; this would be a single "dependson" property in the object we pass to our ADO Stages model: 
+Consider the complexity of this basic example that attempts to implement environment promotion order using a matrix; this would be a single "dependson" property in the object we pass to our ADO Stages model. In GH, it would be more readable with independent jobs and explicit `needs` relationships: 
 
 **Example of matrix complexity shifting into conditions + JSON lookups:**
 
@@ -318,7 +322,9 @@ jobs:
           resource_group: ${{ fromJSON(inputs.environments_json)[matrix.env].resource_group }}
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json)[matrix.env].app_services) }}
 ```
+What's worse, this overly complex snippet will not actually work for true gated promotion order. Matrix rows are sibling job runs, and GitHub does not provide per-row `needs` dependencies (for example, "all `test` rows must wait for all `dev` rows"). The `if` expression can filter runs, but it cannot create a deterministic dependency chain between matrix values. 
 
+In practice, this means `dev`, `test`, and `prod` matrix rows may still be scheduled as peers, and environment/branch checks only gate individual rows, not stage-to-stage progression. Again, to enforce strict promotion (`dev -> test -> prod`), you need separate jobs with explicit `needs` relationships, optionally with a matrix inside each environment job for fan-out.
 
 ### GitHub Actions Lack the Stages Construct ###
 
