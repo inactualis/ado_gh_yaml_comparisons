@@ -23,34 +23,29 @@ Note the following presumptions about the core principles to which these example
 
 - **Parameterization** - Inputs should be parameterized to allow flexibility and reuse across different environments and applications.
 
-A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficult to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers. So while these examples might be easy for *you* to understand in isolation, try to think about them in the context of a major, Enterprise-scale SDLC - including all the humans involved in keeping such a practice operational.  
+A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile automation. This can make it difficult to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers. So while these examples might be easy for *you* to understand in isolation, try to think about them in the context of a major, Enterprise-scale SDLC - including all the humans involved in keeping such a practice operational.  
 
 ## The GitHub Actions Pattern has Some Challenges
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the principles above and discuss how they manifest with Actions.
 
 ### GH Actions Often Require JSON
-Let's start by comparing the smallest elements in each lifecycle: the GH Composite Action (action.yaml) versus the ADO step template (azure-appservice-deploy-step.yml). The first thing to notice is that the ADO step template can directly reference environment parameters and other context, whereas the GH Reusable Workflow and Composite Action rely on serialized JSON payloads and runtime extraction. While this may look manageable in this simple example, the human readability of the GH file quickly degrades as the complexity of the environment and the number of parameters increase. Simply put, JSON in YAML (GH) is more complex than just YAML (ADO). 
+To evaluate this point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH reusable workflow (`deploy-appservices.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
 
-**ADO step template (`azure-appservice-deploy-step.yml`) — direct parameter binding (no JSON parsing):**
+**ADO stage template (`azure-appservice-deploy-stages.yml`) — object input + direct traversal (no JSON parsing):**
 
 ```yaml
 parameters:
-  - name: azureServiceConnection
-    type: string
-  - name: appName
-    type: string
-  - name: packagePath
-    type: string
-  - name: deploymentMethod
-    type: string
+  - name: environments
+    type: object
 
-steps:
-  - task: AzureWebApp@1
-    inputs:
-      azureSubscription: ${{ parameters.azureServiceConnection }}
-      appName: ${{ parameters.appName }}
-      package: ${{ parameters.packagePath }}
-      deploymentMethod: ${{ parameters.deploymentMethod }}
+stages:
+  - ${{ each env in parameters.environments }}:
+      - stage: ${{ env.stageName }}
+        dependsOn: ${{ env.dependsOn }}
+        jobs:
+          - ${{ each appService in env.appServices }}:
+              - deployment: ${{ appService.deploymentName }}
+                environment: ${{ env.environmentResource }}
 ```
 
 **GitHub reusable workflow (`deploy-appservices.yml`) — JSON extraction with `fromJSON(...)`:**
@@ -78,7 +73,7 @@ jobs:
 ### GH Actions Often Require Inline Code
 Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
 
-Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action. In this pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML.
+Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action in GitHub. In this pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML.
 
 **ADO nested step template (`azure-appservice-deploy-step.yml`) — no inline loop/script required:**
 
