@@ -1,6 +1,8 @@
 ### Comparing Azure DevOps and GitHub YAML Constructs
 
-This repo contains examples of two lifecycles that highlight YAML elements from Azure Devps (ADO) that are not yet present in GitHub (GH) Actions, namely:
+> **TL;DR:** ADO gives native Stages + Control Loops + structured Object parameters; GitHub can approximate these features with JSON, matrices, and Composite Actions, but usually with more complexity and duplication.
+
+This repo contains examples of two lifecycles that highlight YAML elements from Azure DevOps (ADO) that are not yet present in GitHub (GH) Actions, namely:
 - Stages
 - Control loops (foreach and forif)
 - Object Parameters
@@ -9,17 +11,17 @@ The examples lay out a common enterprise-scale pattern in both ADO and GH. This 
 
 Note the following presumptions about the principles we value for this example: 
 
-- Do Not Repeat Yourself - All templates and workflows should be reusable and avoid duplication across environments and repositories.
+- **Do Not Repeat Yourself** - All templates and workflows should be reusable and avoid duplication across environments and repositories.
 
-- Inline Code Should be Avoided Entirely - All code should be encapsulated to ensure maintainability and consistency across environments. 
+- **Inline Code Should be Avoided Entirely** - All code should be encapsulated to ensure maintainability and consistency across environments. 
 
-- Single Source of Truth - Configuration and deployment logic should be centralized to ensure consistency and ease of maintenance.
+- **Single Source of Truth** - Configuration and deployment logic should be centralized to ensure consistency and ease of maintenance.
 
-- Environment Parity - Non-production and production environments should follow the same deployment patterns to reduce risk and increase reliability.
+- **Environment Parity** - Non-production and production environments should follow the same deployment patterns to reduce risk and increase reliability.
 
-- Explicit Dependencies - Stages and jobs should declare dependencies to control execution order and ensure correct sequencing.
+- **Explicit Dependencies** - Stages and jobs should declare dependencies to control execution order and ensure correct sequencing.
 
-- Parameterization - Inputs should be parameterized to allow flexibility and reuse across different environments and applications.
+- **Parameterization** - Inputs should be parameterized to allow flexibility and reuse across different environments and applications.
 
 A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile pipelines. This can make it difficultlt to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers.
 
@@ -284,14 +286,45 @@ Is the GH matrix construct a good alternative? Sometimes, but typically not at e
 test-* depends on all dev-*
 prod-* depends on all test-*
 
-- **Good fit** when environments are mostly identical and can run in parallel.
-- **Bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. Consider this matrix that attempts to sequence environments via conditions rather than explicit job dependencies: 
+- **Good fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
+- **Bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. 
 
+Consider the complexity of this basic example that attempts to implement environment promotion order using a matrix; this would be a single "dependson" property in the object we pass to our ADO Stages model: 
+
+**Example of matrix complexity shifting into conditions + JSON lookups:**
+
+```yaml
+jobs:
+  deploy_by_environment:
+    strategy:
+      matrix:
+        env: [dev, test, prod]
+    runs-on: ubuntu-latest
+
+    # Gating is now encoded in conditional logic, not stage orchestration
+    if: ${{
+      fromJSON(inputs.environments_json)[matrix.env].enabled &&
+      (matrix.env != 'prod' || github.ref == 'refs/heads/main')
+    }}
+
+    environment: ${{ fromJSON(inputs.environments_json)[matrix.env].environment_resource }}
+
+    steps:
+      - name: Deploy matrix environment
+        uses: ./.github/actions/deploy-appservices
+        with:
+          environment_name: ${{ matrix.env }}
+          is_prod: ${{ fromJSON(inputs.environments_json)[matrix.env].is_prod }}
+          resource_group: ${{ fromJSON(inputs.environments_json)[matrix.env].resource_group }}
+          app_services_json: ${{ toJSON(fromJSON(inputs.environments_json)[matrix.env].app_services) }}
+```
 
 
 ### GitHub Actions Lack the Stages Construct ###
 
-In Azure DevOps, Stages provide a natural way to sequence deployments across environments (e.g., dev → prod) and manage dependencies. GitHub Actions does not have a native Stages construct. Instead, sequencing is achieved using jobs with `needs` relationships. Each environment deployment becomes a separate job, and the order is enforced via `needs`. We've discussed this above as well, where the the matrix option leads to violations of our key principles: we are forced to create multiple, duplicative jobs and matrices for each. 
+In Azure DevOps, Stages provide a natural way to sequence deployments across environments (e.g., dev → prod) and manage dependencies. We define a Stage once, use our Object type parameter to control which environments are included, and then iterate over that as many times as needed. And since the Object parameter type is structured, we can easily access environment-specific properties (like `dependsOn`, `isProd`, etc.) within the stage definition.
+
+In GitHub, sequencing is achieved using jobs with `needs` relationships. Since we don't have access to ADO's Stages, each environment deployment becomes a separate job. As we discussed above, this challenge begins to compound if we try to employ GitHub's matrix construct.
 
 **Azure DevOps (`azure-appservice-deploy-stages.yml`) — stage-level lifecycle:**
 
@@ -316,9 +349,9 @@ jobs:
     if: ${{ fromJSON(inputs.environments_json).prod.enabled }}
 ```
 
-Again, remember that this is a very simple example of the challenge. The example above lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). We wind up violating several of our core principles to approximate the ADO Stage construct, and the problems this creates are substantial and meaningul at scale. 
+Again, remember that this is a very simple example of the challenge. The example above lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). Notice how the inline code is not repeated. The problems this creates are substantial and meaningul at scale. 
 
-**Most Common Pattern Seen in GitHub Actions (`deploy-appservices.yml`):**
+**GitHub Pattern Without Composite Action (`deploy-appservices.yml`):**
 ```yaml
 jobs:
   deploy_dev:
@@ -339,7 +372,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy dev app services (inline)
+      - name: Deploy development app services (inline)
         shell: bash
         run: |
           set -euo pipefail
@@ -371,7 +404,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy prod app services (inline)
+      - name: Deploy production app services (inline)
         shell: bash
         run: |
           set -euo pipefail
