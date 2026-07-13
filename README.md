@@ -28,7 +28,7 @@ A comment on the second bullet point. This principle implies a heavy prejudice f
 ## The with GitHub Actions Pattern has Some Challenges
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the priniciples above and discuss how they manifest with Actions.
 
-### The GH Actions Require JSON
+### GH Actions Often Require JSON
 Let's start by comparing the smallest elements in each lifecycle: the GH Composite Action (action.yaml) versus the ADO step template (azure-appservice-deploy-step.yml). The first thing to notice is that the ADO step template can directly reference environment parameters and other context, whereas the GH Reusable Workflow and Composite Action rely on serialized JSON payloads and runtime extraction. While this may look manageable in this simple example, the human readability of the GH file quickly degrades as the complexity of the environment and the number of parameters increase. Simply put, JSON in YAML (GH) is more complex than just YAML (ADO). 
 
 **ADO step template (`azure-appservice-deploy-step.yml`) — direct parameter binding (no JSON parsing):**
@@ -75,12 +75,10 @@ jobs:
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).dev.app_services) }}
 ```
 
-### The GH Actions Require Inline Code
+### GH Actions Often Require Inline Code
 Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
 
-Again, this is a very simple example that will spiral into complex and hard-to-maintain scripts as the number of app services and deployment logic grows.
-
-
+Again, this is a very simple example, but it quickly spirals into complex and hard-to-maintain scripts as the number of app services and deployment logic grows.
 
 **ADO nested step template (`azure-appservice-deploy-step.yml`) — no inline loop/script required:**
 
@@ -130,8 +128,6 @@ In Azure DevOps, templates can accept structured Object parameters that allow di
 
 Let's compare azure-appsevice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
 
-**Azure DevOps (`azure-appservice-deploy-stages.yml`) — native object parameter:**
-
 ```yaml
 parameters:
   - name: environments
@@ -169,9 +165,9 @@ jobs:
           resource_group: ${{ fromJSON(inputs.environments_json).dev.resource_group }}
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).dev.app_services) }}
 ```
-If we go one level higher, we see how the consumer workflows are impacted by this difference. Github must pass JSON strings to the Reusable Workflow, which then parses those strings at runtime to access environment-specific properties. The need for inline json here again leads to more verbose and difficult to maintain YAML at an entirely different level in our template stack. And remember that we are looking at an exceedingly simple example here: this issue compounds with the complexity of the lifecycle. 
+If we go one level higher, we see how the consumer workflows are impacted by this difference. Github must pass JSON strings to the Reusable Workflow, which then parses those strings at runtime to access environment-specific properties. The need for inline json here again leads to more verbose and difficult to maintain YAML at every level in our template stack. And remember that we are looking at the simplest example: this issue compounds with the complexity of the lifecycle. 
 
- This contrasts with Azure DevOps, where the object parameter allows direct access to nested properties without runtime parsing. The Object is simply much easier for humans to read and write, while JSON requires careful formatting and diligence to maintain. 
+This contrasts with Azure DevOps, where the object parameter allows direct access to nested properties without runtime parsing. The Object is much easier for humans to read and write, while JSON requires careful formatting and diligence to maintain. 
 
 **Azure DevOps consumer (`someapp-automation.yml`) — passes structured object directly:**
 
