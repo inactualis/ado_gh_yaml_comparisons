@@ -424,7 +424,15 @@ jobs:
           done
 ```
 
+## Conclusion
 
+This comparison is **not** meant to position GitHub Actions as "bad" or incapable. The goal is narrower: to show where friction appears **today** when modeling this specific enterprise deployment pattern (centralized reuse, strict promotion order, nested environment/app hierarchies, and minimal inline scripting).
+
+GitHub Actions can absolutely implement this lifecycle, and many teams succeed with it. The key takeaway is that, for this pattern, teams often need extra constructs (for example JSON serialization/parsing, additional job wiring, Composite Actions, and conditional logic) to approximate capabilities that Azure DevOps exposes more directly in YAML.
+
+If your environments are mostly parallel and uniform, GitHub's model can be a strong fit. If your process depends heavily on stage-centric orchestration and deep template-time hierarchy, these tradeoffs are important to account for up front.
+
+In short: this is a **tradeoff analysis**, not a platform takedown. The intent is to help teams choose the right automation model for their governance and delivery needs.
 
 ## Reference
 
