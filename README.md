@@ -78,7 +78,7 @@ jobs:
 ### GH Actions Often Require Inline Code
 Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
 
-Again, this is a very simple example, but it quickly spirals into complex and hard-to-maintain scripts as the number of app services and deployment logic grows.
+Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action. In this pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML.
 
 **ADO nested step template (`azure-appservice-deploy-step.yml`) — no inline loop/script required:**
 
@@ -259,7 +259,7 @@ jobs:
         }
 ```
 
-### GitHub Actions Cannot use Control Loops ###
+### GitHub Actions Lack ADO-Style Template-Time Control Loops ###
 
 Azure DevOps supports template-time control loops (`each`) and conditional blocks (`if`) directly in YAML templates. That lets one template scale across many environments and app services without duplicating job definitions.
 
@@ -316,12 +316,12 @@ jobs:
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json)[matrix.environment].app_services) }}
 ```
 
-Also notice that the GH matrix approach is typically not useful where strict promotion order and environment-specific controls are required. You must resort to multiple, duplicative matrices, where each matrix row becomes a sibling job instance. You can’t rely on a single matrix to define per-row dependencies like:
+Also notice that the GH matrix approach is often less suitable where strict promotion order and environment-specific controls are required. In many implementations, teams end up with multiple, duplicative matrices, where each matrix row becomes a sibling job instance. In practice, you generally can’t rely on a single matrix to define per-row dependencies like:
 
 test-* depends on all dev-*
 prod-* depends on all test-*
 
-- **Matrices are a fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
+- **Matrices are a good fit** when environments are mostly identical and can run in parallel. Examples might include IAC to sibling environments. 
 - **But they're a bad fit** when you need strict promotion order (dev → test → prod), environment-specific approvals/gates, or deeply nested lifecycle logic. In those cases, matrix often shifts complexity into conditions and JSON lookups rather than truly reducing it. 
 
 Consider the complexity of this basic example that attempts to implement environment promotion order using a matrix; this would be a single "dependson" property in the object we pass to our ADO Stages model. In GH, it would be more readable with independent jobs and explicit `needs` relationships: 
