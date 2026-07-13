@@ -29,7 +29,7 @@ A comment on the second bullet point. This principle implies a heavy prejudice f
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the principles above and discuss how they manifest with Actions.
 
 ### GH Actions Often Require JSON
-To evaluate this point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH Reusable Workflow (`deploy-appservices.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
+To evaluate this first point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH Reusable Workflow (`deploy-appservices.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
 
 **ADO stage template (`azure-appservice-deploy-stages.yml`) — object input + direct traversal (no JSON parsing):**
 
@@ -73,7 +73,7 @@ jobs:
 ### GH Actions Often Require Inline Code
 Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
 
-Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action in GitHub. In this pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML - more on this below.
+Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action in GitHub. In this example pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML - more on this below.
 
 **ADO nested step template (`azure-appservice-deploy-step.yml`) — no inline loop/script required:**
 
@@ -152,50 +152,7 @@ runs:
 ```
 ### GitHub Actions Lack the Object Parameter Model
 
-Many of the concerns above hinge on the fact that Azure DevOps templates can accept structured object parameters, allowing direct access to nested properties. Reusable Workflows in GH do not support object-typed inputs in the same way; in this pattern, complex lifecycle data is passed as JSON strings and parsed at runtime. This increases verbosity and can raise maintenance overhead, since authors must manage JSON serialization/deserialization and expression paths in addition to deployment logic.
-
-Let's compare azure-appservice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
-
-```yaml
-parameters:
-  - name: environments
-    type: object
-
-stages:
-  - ${{ each env in parameters.environments }}:
-      - stage: ${{ env.stageName }}
-        displayName: Deploy ${{ env.displayName }}
-        dependsOn: ${{ env.dependsOn }}
-        jobs:
-          - ${{ each appService in env.appServices }}:
-              - deployment: ${{ appService.deploymentName }}
-                environment: ${{ env.environmentResource }}
-```
-
-**GitHub Actions (`deploy-appservices.yml`) — JSON string + runtime parsing:**
-
-```yaml
-on:
-  workflow_call:
-    inputs:
-      environments_json:
-        required: true
-        type: string
-
-jobs:
-  deploy_dev:
-    if: ${{ fromJSON(inputs.environments_json).dev.enabled }}
-    environment: ${{ fromJSON(inputs.environments_json).dev.environment_resource }}
-    steps:
-      - uses: ./.github/actions/deploy-appservices
-        with:
-          is_prod: ${{ fromJSON(inputs.environments_json).dev.is_prod }}
-          resource_group: ${{ fromJSON(inputs.environments_json).dev.resource_group }}
-          app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).dev.app_services) }}
-```
-If we go one level higher, we see how the consumer workflows are impacted by this difference. GitHub must pass JSON strings to the Reusable Workflow, which then parses those strings at runtime to access environment-specific properties. The need for inline JSON here again leads to more verbose and difficult to maintain YAML at every level in our template stack. And remember that we are looking at the simplest example: this issue compounds with the complexity of the lifecycle. 
-
-This contrasts with Azure DevOps, where the object parameter allows direct access to nested properties without runtime parsing. The Object is much easier for humans to read and write, while JSON requires careful formatting and diligence to maintain. 
+The previous section showed this at the reusable-orchestrator layer. Here we focus specifically on the **consumer (caller) layer**. Azure DevOps callers can pass a structured YAML object directly into the stage template, while GitHub callers in this pattern pass serialized JSON into the reusable workflow. That extra serialization/parsing step increases verbosity and maintenance burden as lifecycle complexity grows.
 
 **Azure DevOps consumer (`someapp-automation.yml`) — passes structured object directly:**
 
@@ -234,22 +191,34 @@ jobs:
   deploy:
     uses: your-org/shared-workflows/.github/workflows/deploy-appservices.yml@main
     with:
+      artifact_name: drop
+      artifact_path: artifact
+      package_path: app.zip
+      vm_image: ubuntu-latest
       environments_json: |
         {
           "dev": {
             "display_name": "Development",
             "enabled": true,
             "is_prod": false,
+            "resource_group": "rg-someapp-dev",
             "environment_resource": "dev",
-            "app_services": [{ "name": "someapp-web-dev-01" }]
+            "app_services": [
+              { "name": "someapp-web-dev-01" },
+              { "name": "someapp-web-dev-02" }
+            ]
           },
           "prod": {
             "display_name": "Production",
             "enabled": true,
             "is_prod": true,
+            "resource_group": "rg-someapp-prod",
             "environment_resource": "prod",
             "depends_on": ["deploy_dev"],
-            "app_services": [{ "name": "someapp-web-prod-01" }]
+            "app_services": [
+              { "name": "someapp-web-prod-01" },
+              { "name": "someapp-web-prod-02" }
+            ]
           }
         }
 ```
