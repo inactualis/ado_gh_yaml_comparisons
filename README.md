@@ -29,7 +29,7 @@ A comment on the second bullet point. This principle implies a heavy prejudice f
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the principles above and discuss how they manifest with Actions.
 
 ### GH Actions Often Require JSON
-To evaluate this point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH reusable workflow (`deploy-appservices.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
+To evaluate this point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH Reusable Workflow (`deploy-appservices.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
 
 **ADO stage template (`azure-appservice-deploy-stages.yml`) — object input + direct traversal (no JSON parsing):**
 
@@ -73,7 +73,7 @@ jobs:
 ### GH Actions Often Require Inline Code
 Because GitHub Actions do not provide the same template-time looping and object traversal model used in ADO templates, the Composite Action uses inline shell + `jq` to iterate over app service definitions. In Azure DevOps, the equivalent behavior is handled by template expansion + task inputs, so the deployment logic stays declarative and avoids inline scripting in the pipeline/template itself.
 
-Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action in GitHub. In this pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML.
+Again, this is a very simple example, and single-target scenarios can often rely on a default App Service Action in GitHub. In this pattern, however, we still need iteration across multiple app services and environment-specific branching logic. Without centralizing that behavior in a reusable component (like a Composite Action), teams typically end up reintroducing inline scripting and duplicated YAML - more on this below.
 
 **ADO nested step template (`azure-appservice-deploy-step.yml`) — no inline loop/script required:**
 
@@ -152,7 +152,7 @@ runs:
 ```
 ### GitHub Actions Lack the Object Parameter Model
 
-In Azure DevOps, templates can accept structured Object parameters that allow direct access to nested properties. GitHub Actions does not support Object parameters in the same way; instead, JSON strings are passed and parsed at runtime. This adds verbosity and can increase maintenance overhead, because authors must manage JSON serialization/deserialization and expression paths in addition to deployment logic.
+Many of the concerns above hinge on the fact that Azure DevOps templates can accept structured object parameters, allowing direct access to nested properties. Reusable Workflows in GH do not support object-typed inputs in the same way; in this pattern, complex lifecycle data is passed as JSON strings and parsed at runtime. This increases verbosity and can raise maintenance overhead, since authors must manage JSON serialization/deserialization and expression paths in addition to deployment logic.
 
 Let's compare azure-appservice-deploy-stages.yml to deploy-appservices.yml to see how much cleaner our code is with the ADO Object versus the JSON parsing approach in GitHub Actions.
 
