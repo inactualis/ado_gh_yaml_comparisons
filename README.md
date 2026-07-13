@@ -325,7 +325,7 @@ In practice, this means `dev`, `test`, and `prod` matrix rows may still be sched
 
 In Azure DevOps, Stages provide a natural way to sequence deployments across environments (e.g., dev → prod) and manage dependencies. We define a Stage once, use our Object type parameter to control which environments are included, and then iterate over that as many times as needed. And since the Object parameter type is structured, we can easily access environment-specific properties (like `dependsOn`, `isProd`, etc.) within the stage definition.
 
-In GitHub, sequencing is achieved using jobs with `needs` relationships. Since we don't have access to ADO's Stages, each environment deployment becomes a separate job. As we discussed above, this challenge begins to compound if we try to employ GitHub's matrix construct.
+In GitHub, sequencing is achieved using jobs with `needs` relationships. Since there is no first-class `stages` construct in workflow YAML, each environment deployment is typically modeled as a separate job. The snippets below intentionally isolate that stage-vs-job sequencing difference; matrix-specific tradeoffs were covered in the prior section.
 
 **Azure DevOps (`azure-appservice-deploy-stages.yml`) — stage-level lifecycle:**
 
@@ -351,7 +351,7 @@ jobs:
     if: ${{ fromJSON(inputs.environments_json).prod.enabled }}
 ```
 
-Again, remember that this is a very simple example of the challenge. The example above lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). Notice how the inline code is repeated. The problems this creates are substantial and meaningful at scale. 
+Remember that this is a very simple expression of the challenge. Our example pattern lessens the concern by referencing a Composite Action, but this is where a lot of organizations create cascading complexity: it is common to see Actions defined repeatedly under each job (rather than taking the extra step of encapsulating the work in a Composite Action). Notice how the inline code is repeated. The problems this creates are substantial and meaningful at scale. 
 
 **GitHub Pattern Without Composite Action (`deploy-appservices.yml`):**
 ```yaml
