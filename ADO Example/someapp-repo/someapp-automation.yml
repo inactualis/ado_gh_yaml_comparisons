@@ -12,7 +12,17 @@ resources:
       ref: refs/heads/main
 
 stages:
-  - template: azure-appservice-deploy-stages.yml@templatesRepo
+  - template: build/net/net-build-stage.yml@templatesRepo
+    parameters:
+      stageName: Build
+      displayName: Build SomeApp
+      vmImage: ubuntu-latest
+      sdkVersion: 8.0.x
+      projectPath: src/SomeApp/SomeApp.csproj
+      artifactName: drop
+      packageName: app.zip
+
+  - template: deploy/az-appservice/azure-appservice-deploy-stages.yml@templatesRepo
     parameters:
       artifactName: drop
       packagePath: '$(Pipeline.Workspace)/drop/app.zip'
@@ -22,7 +32,8 @@ stages:
           stageName: Deploy_dev
           displayName: Development
           isProd: false
-          dependsOn: []
+          dependsOn:
+            - Build
           azureServiceConnection: sc-azure-dev
           environmentResource: dev
           appServices:

@@ -1,0 +1,47 @@
+name: Build .NET Application
+description: Restore, build, publish, and package a .NET application.
+
+inputs:
+  sdk_version:
+    description: .NET SDK version
+    required: false
+    default: 8.0.x
+  project_path:
+    description: SDK project path to restore, build, and publish
+    required: false
+    default: .
+  output_path:
+    description: Directory for published application files
+    required: false
+    default: artifact/publish
+  package_path:
+    description: Path of the ZIP deployment package to create
+    required: false
+    default: artifact/app.zip
+
+runs:
+  using: composite
+  steps:
+    - name: Use .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.sdk_version }}
+
+    - name: Restore
+      shell: bash
+      run: dotnet restore "${{ inputs.project_path }}"
+
+    - name: Build
+      shell: bash
+      run: dotnet build "${{ inputs.project_path }}" --configuration Release --no-restore
+
+    - name: Publish
+      shell: bash
+      run: dotnet publish "${{ inputs.project_path }}" --configuration Release --output "${{ inputs.output_path }}" --no-build
+
+    - name: Create deployment package
+      shell: bash
+      run: |
+        mkdir -p "$(dirname "${{ inputs.package_path }}")"
+        cd "${{ inputs.output_path }}"
+        zip -r "${GITHUB_WORKSPACE}/${{ inputs.package_path }}" .

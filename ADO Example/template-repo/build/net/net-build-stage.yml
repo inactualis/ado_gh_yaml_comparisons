@@ -1,0 +1,53 @@
+parameters:
+  - name: stageName
+    type: string
+    default: Build
+
+  - name: displayName
+    type: string
+    default: Build application
+
+  - name: dependsOn
+    type: object
+    default: []
+
+  - name: vmImage
+    type: string
+    default: ubuntu-latest
+
+  - name: sdkVersion
+    type: string
+    default: 8.0.x
+
+  - name: projectPath
+    type: string
+    default: .
+
+  - name: artifactName
+    type: string
+    default: drop
+
+  - name: packageName
+    type: string
+    default: app.zip
+
+  - name: stepTemplate
+    type: string
+    default: net-build-steps.yml
+
+stages:
+  - stage: ${{ parameters.stageName }}
+    displayName: ${{ parameters.displayName }}
+    dependsOn: ${{ parameters.dependsOn }}
+    jobs:
+      - job: Build
+        displayName: Build and package application
+        pool:
+          vmImage: ${{ parameters.vmImage }}
+        steps:
+          - template: ${{ parameters.stepTemplate }}
+            parameters:
+              sdkVersion: ${{ parameters.sdkVersion }}
+              projectPath: ${{ parameters.projectPath }}
+              artifactName: ${{ parameters.artifactName }}
+              packageName: ${{ parameters.packageName }}

@@ -1,4 +1,4 @@
-name: Deploy App Services
+name: Deploy Azure App Services
 
 on:
   workflow_call:
@@ -22,15 +22,17 @@ on:
         default: app.zip
 
       vm_image:
-        description: Build agent image
+        description: Deployment runner image
         required: false
         type: string
         default: ubuntu-latest
 
       environments_json:
         description: JSON object containing the full lifecycle environment definitions
-        required: true
+        required: false
         type: string
+        default: >-
+          {"dev":{"display_name":"Development","enabled":true,"is_prod":false,"resource_group":"rg-someapp-dev","environment_resource":"dev","app_services":[{"name":"someapp-web-dev-01"}]},"prod":{"display_name":"Production","enabled":true,"is_prod":true,"resource_group":"rg-someapp-prod","environment_resource":"prod","depends_on":["deploy_dev"],"app_services":[{"name":"someapp-web-prod-01"}]}}
 
     secrets:
       AZURE_CLIENT_ID:
@@ -66,7 +68,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy development app services
-        uses: ./.github/actions/deploy-appservices
+        uses: $/.github/actions/deploy/az-appservice
         with:
           environment_name: dev
           is_prod: ${{ fromJSON(inputs.environments_json).dev.is_prod }}
@@ -97,7 +99,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy production app services
-        uses: ./.github/actions/deploy-appservices
+        uses: $/.github/actions/deploy/az-appservice
         with:
           environment_name: prod
           is_prod: ${{ fromJSON(inputs.environments_json).prod.is_prod }}
