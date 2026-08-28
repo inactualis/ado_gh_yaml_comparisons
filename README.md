@@ -46,7 +46,9 @@ parameters:
 
 stages:
   - ${{ each env in parameters.environments }}:
-      # Note that stageName, dependsOn, and environmentResource are all properties of the object we pass in; the point here is that we can access them directly without any serialization or parsing.
+      # Note that stageName, dependsOn, and environmentResource are all 
+      # properties of the object we pass in; the point here is that we can 
+      # access them directly without any serialization or parsing.
       - stage: ${{ env.stageName }}
         dependsOn: ${{ env.dependsOn }}
         jobs:
@@ -75,7 +77,10 @@ jobs:
           is_prod: ${{ fromJSON(inputs.environments_json).dev.is_prod }}
           resource_group: ${{ fromJSON(inputs.environments_json).dev.resource_group }}
           app_services_json: ${{ toJSON(fromJSON(inputs.environments_json).dev.app_services) }}
-  # All subsequent environments must repeat this same pattern (the deploy-dev node), with the same JSON parsing for each property. This opens up the possiblity of material differences between environments if a property is accidentally omitted or misnamed. In ADO, the object parameter type and template-time traversal model prevents this class of error.
+  # All subsequent environments must repeat this same pattern (the deploy-dev node), 
+  # with the same JSON parsing for each property. This opens up the possiblity of material differences 
+  # between environments if a property is accidentally omitted or misnamed. In ADO, the object parameter 
+  # type and template-time traversal model prevents this class of error.
 ```
 ADO Stages make complex promotion lifecycles declarative, reusable, and dependency-aware—without duplicating jobs or encoding orchestration in JSON and conditional logic.
 
@@ -138,12 +143,13 @@ runs:
         ARTIFACT_PATH: ${{ inputs.artifact_path }}
         PACKAGE_PATH: ${{ inputs.package_path }}
         APP_SERVICES_JSON: ${{ inputs.app_services_json }}
+      # GitHub cannot expand steps from this JSON input, so the action must parse and loop 
+      # over each app service at runtime, as shown here.
       run: |
         set -euo pipefail
         package_file="${ARTIFACT_PATH}/${PACKAGE_PATH}"
         echo "Deploying to ${ENVIRONMENT_NAME} using package ${package_file}"
 
-        # GitHub cannot expand steps from this JSON input, so the action must parse and loop over each app service at runtime.
         echo "${APP_SERVICES_JSON}" | jq -c '.[]' | while read -r service; do
           app_name="$(echo "${service}" | jq -r '.name')"
           if [ "${IS_PROD}" = "true" ]; then
