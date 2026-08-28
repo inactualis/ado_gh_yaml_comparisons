@@ -1,0 +1,60 @@
+parameters:
+  - name: sdkVersion
+    type: string
+    default: 8.0.x
+
+  - name: projectPath
+    type: string
+    default: .
+
+  - name: artifactName
+    type: string
+    default: drop
+
+  - name: packageName
+    type: string
+    default: app.zip
+
+steps:
+  - task: UseDotNet@2
+    displayName: Use .NET SDK ${{ parameters.sdkVersion }}
+    inputs:
+      packageType: sdk
+      version: ${{ parameters.sdkVersion }}
+
+  - task: DotNetCoreCLI@2
+    displayName: Restore
+    inputs:
+      command: restore
+      projects: ${{ parameters.projectPath }}
+
+  - task: DotNetCoreCLI@2
+    displayName: Build
+    inputs:
+      command: build
+      projects: ${{ parameters.projectPath }}
+      arguments: '--configuration Release --no-restore'
+
+  - task: DotNetCoreCLI@2
+    displayName: Publish
+    inputs:
+      command: publish
+      publishWebProjects: false
+      projects: ${{ parameters.projectPath }}
+      arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)/publish --no-build'
+      zipAfterPublish: false
+
+  - task: ArchiveFiles@2
+    displayName: Create deployment package
+    inputs:
+      rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/publish'
+      includeRootFolder: false
+      archiveType: zip
+      archiveFile: '$(Build.ArtifactStagingDirectory)/${{ parameters.packageName }}'
+      replaceExistingArchive: true
+
+  - task: PublishPipelineArtifact@1
+    displayName: Publish ${{ parameters.artifactName }} artifact
+    inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)/${{ parameters.packageName }}'
+      artifact: ${{ parameters.artifactName }}

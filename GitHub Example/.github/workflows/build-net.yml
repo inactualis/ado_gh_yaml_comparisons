@@ -1,0 +1,60 @@
+name: Build .NET Application
+
+on:
+  workflow_call:
+    inputs:
+      sdk_version:
+        description: .NET SDK version
+        required: false
+        type: string
+        default: 8.0.x
+
+      project_path:
+        description: SDK project path to restore, build, and publish
+        required: false
+        type: string
+        default: .
+
+      artifact_name:
+        description: Artifact name to publish
+        required: false
+        type: string
+        default: drop
+
+      package_name:
+        description: Deployment package filename
+        required: false
+        type: string
+        default: app.zip
+
+      vm_image:
+        description: Build runner image
+        required: false
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and package application
+    runs-on: ${{ inputs.vm_image }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build .NET application
+        uses: $/.github/actions/build/net
+        with:
+          sdk_version: ${{ inputs.sdk_version }}
+          project_path: ${{ inputs.project_path }}
+          output_path: artifact/publish
+          package_path: artifact/${{ inputs.package_name }}
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifact/${{ inputs.package_name }}
+          if-no-files-found: error

@@ -1,16 +1,19 @@
-name: Deploy App Services
+name: Deploy Azure App Services
 description: Deploy a package to one or more Azure App Services from a JSON list.
 
 inputs:
   environment_name:
     description: Environment name for logging and environment binding
-    required: true
+    required: false
+    default: dev
   is_prod:
     description: Whether this deployment is production
-    required: true
+    required: false
+    default: "false"
   resource_group:
     description: Azure resource group containing the App Services
-    required: true
+    required: false
+    default: rg-someapp-dev
   artifact_path:
     description: Folder containing the downloaded artifact
     required: false
@@ -21,7 +24,8 @@ inputs:
     default: app.zip
   app_services_json:
     description: JSON array of app services, e.g. [{"name":"app1"},{"name":"app2"}]
-    required: true
+    required: false
+    default: '[{"name":"someapp-web-dev-01"}]'
 
 runs:
   using: composite

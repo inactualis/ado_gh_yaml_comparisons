@@ -1,12 +1,15 @@
 parameters:
   - name: azureServiceConnection
     type: string
+    default: sc-azure-dev
 
   - name: appName
     type: string
+    default: someapp-web-dev-01
 
   - name: packagePath
     type: string
+    default: '$(Pipeline.Workspace)/drop/app.zip'
 
   - name: deploymentMethod
     type: string

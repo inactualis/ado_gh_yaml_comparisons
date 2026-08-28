@@ -1,4 +1,4 @@
-name: Deploy App Team
+name: Build and Deploy App Team
 
 on:
   workflow_dispatch:
@@ -7,9 +7,20 @@ on:
 # This points to a shared workflows repository, similar to ADO resources.repositories + template.
 
 jobs:
+  build:
+    name: Build App
+    uses: your-org/shared-workflows/.github/workflows/build-net.yml@main
+    with:
+      sdk_version: 8.0.x
+      project_path: src/SomeApp/SomeApp.csproj
+      artifact_name: drop
+      package_name: app.zip
+      vm_image: ubuntu-latest
+
   deploy:
     name: Deploy App Lifecycle
-    uses: your-org/shared-workflows/.github/workflows/deploy-appservices.yml@main
+    needs: build
+    uses: your-org/shared-workflows/.github/workflows/deploy-az-appservice.yml@main
     with:
       artifact_name: drop
       artifact_path: artifact

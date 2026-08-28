@@ -25,11 +25,15 @@ Note the following presumptions about the core principles to which these example
 
 A comment on the second bullet point. This principle implies a heavy prejudice for centralized Tasks/Actions. Regardless of an organization's skill level, scripting in YAMLs leads to more difficult maintenance, lengthier troubleshooting, and more fragile automation. This can make it difficult to manage changes and ensure consistent behavior across environments. It also requires a different skill set than employed by most DevOps Engineers. So while these examples might be easy for *you* to understand in isolation, try to think about them in the context of a major, Enterprise-scale SDLC - including all the humans involved in keeping such a practice operational.  
 
+Both examples now implement the same build-once promotion model: a generic .NET build component creates `drop/app.zip`, then that immutable artifact progresses through development and production. Application-specific source paths remain in the app-owned consumer, while build and deployment behavior remains centralized.
+
+The shared components are grouped similarly where each platform permits it. ADO templates use `build/net` and `deploy/az-appservice`. GitHub Composite Actions use the equivalent `.github/actions/build/net` and `.github/actions/deploy/az-appservice` paths, but reusable workflow files must remain directly under `.github/workflows` for GitHub to discover them.
+
 ## The GitHub Actions Pattern has Some Challenges
 The following sections highlight specific issues and limitations that arise when using GitHub Actions for this exact deployment pattern. We'll map these challenges to the principles above and discuss how they manifest with Actions.
 
 ### GH Actions Often Require JSON
-To evaluate this first point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH Reusable Workflow (`deploy-appservices.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
+To evaluate this first point fairly, we should compare equivalent layers in the stack: the ADO stage template (`azure-appservice-deploy-stages.yml`) and the GH Reusable Workflow (`deploy-az-appservice.yml`). At this orchestration layer, ADO accepts a structured object and traverses it directly with template expressions. GitHub reusable workflows, by contrast, only accept `string`/`boolean`/`number` inputs, so complex lifecycle data must be serialized as JSON and parsed with `fromJSON(...)`.
 
 **ADO stage template (`azure-appservice-deploy-stages.yml`) — object input + direct traversal (no JSON parsing):**
 
@@ -48,7 +52,7 @@ stages:
                 environment: ${{ env.environmentResource }}
 ```
 
-**GitHub reusable workflow (`deploy-appservices.yml`) — JSON extraction with `fromJSON(...)`:**
+**GitHub reusable workflow (`deploy-az-appservice.yml`) — JSON extraction with `fromJSON(...)`:**
 
 ```yaml
 on:
@@ -63,7 +67,7 @@ jobs:
     if: ${{ fromJSON(inputs.environments_json).dev.enabled }}
     environment: ${{ fromJSON(inputs.environments_json).dev.environment_resource }}
     steps:
-      - uses: ./.github/actions/deploy-appservices
+      - uses: $/.github/actions/deploy/az-appservice
         with:
           is_prod: ${{ fromJSON(inputs.environments_json).dev.is_prod }}
           resource_group: ${{ fromJSON(inputs.environments_json).dev.resource_group }}
@@ -158,14 +162,22 @@ The previous section showed this at the reusable-orchestrator layer. Here we foc
 
 ```yaml
 stages:
-  - template: azure-appservice-deploy-stages.yml@templatesRepo
+  - template: build/net/net-build-stage.yml@templatesRepo
+    parameters:
+      sdkVersion: 8.0.x
+      projectPath: src/SomeApp/SomeApp.csproj
+      artifactName: drop
+      packageName: app.zip
+
+  - template: deploy/az-appservice/azure-appservice-deploy-stages.yml@templatesRepo
     parameters:
       environments:
         - name: dev
           stageName: Deploy_dev
           displayName: Development
           isProd: false
-          dependsOn: []
+          dependsOn:
+            - Build
           azureServiceConnection: sc-azure-dev
           environmentResource: dev
           appServices:
@@ -188,8 +200,17 @@ stages:
 
 ```yaml
 jobs:
+  build:
+    uses: your-org/shared-workflows/.github/workflows/build-net.yml@main
+    with:
+      sdk_version: 8.0.x
+      project_path: src/SomeApp/SomeApp.csproj
+      artifact_name: drop
+      package_name: app.zip
+
   deploy:
-    uses: your-org/shared-workflows/.github/workflows/deploy-appservices.yml@main
+    needs: build
+    uses: your-org/shared-workflows/.github/workflows/deploy-az-appservice.yml@main
     with:
       artifact_name: drop
       artifact_path: artifact
@@ -272,7 +293,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy selected environment
-        uses: ./.github/actions/deploy-appservices
+        uses: $/.github/actions/deploy/az-appservice
         with:
           environment_name: ${{ matrix.environment }}
           is_prod: ${{ fromJSON(inputs.environments_json)[matrix.environment].is_prod }}
@@ -310,7 +331,7 @@ jobs:
 
     steps:
       - name: Deploy matrix environment
-        uses: ./.github/actions/deploy-appservices
+        uses: $/.github/actions/deploy/az-appservice
         with:
           environment_name: ${{ matrix.env }}
           is_prod: ${{ fromJSON(inputs.environments_json)[matrix.env].is_prod }}
@@ -339,7 +360,7 @@ stages:
               - deployment: ${{ appService.deploymentName }}
 ```
 
-**GitHub Actions (`deploy-appservices.yml`) — job sequencing with `needs`:**
+**GitHub Actions (`deploy-az-appservice.yml`) — job sequencing with `needs`:**
 
 ```yaml
 jobs:
@@ -355,7 +376,7 @@ Remember that this is a very simple expression of the challenge. Even so, we are
 
 Here's how that looks in practice. Notice how the inline code is now also repeated - and this is just two environments. The problems this creates are substantial and meaningful at scale. 
 
-**GitHub Pattern Without Composite Action (`deploy-appservices.yml`):**
+**GitHub Pattern Without Composite Action (`deploy-az-appservice.yml`):**
 ```yaml
 jobs:
   deploy_dev:
@@ -460,14 +481,18 @@ In short: this is a **tradeoff analysis**, not a platform takedown. The intent i
 
 | Layer / Purpose | Azure DevOps Example | GitHub Actions Example | How they match |
 |---|---|---|---|
-| **Consumer entrypoint** | `ADO Example/someapp-repo/someapp-automation.yml` | `GitHub Example/someapp-repo/someapp-automation.yml` | App-team-owned workflow/pipeline that kicks off deployment and passes environment/app configuration. |
-| **Reusable orchestrator** | `ADO Example/template-repo/azure-appservice-deploy-stages.yml` | `GitHub Example/.github/workflows/deploy-appservices.yml` | Centralized reusable lifecycle definition (dev → prod sequencing, per-environment orchestration). |
-| **Reusable deploy unit** | `ADO Example/template-repo/azure-appservice-deploy-step.yml` | `GitHub Example/.github/actions/deploy-appservices/action.yml` | **Direct equivalent**: ADO step template ↔ GitHub Composite Action. Both encapsulate per-app deployment logic. |
+| **Consumer entrypoint** | `ADO Example/someapp-repo/someapp-automation.yml` | `GitHub Example/someapp-repo/someapp-automation.yml` | App-team-owned pipeline/workflow that builds once, then starts the ordered deployment lifecycle. |
+| **Reusable build orchestrator** | `ADO Example/template-repo/build/net/net-build-stage.yml` | `GitHub Example/.github/workflows/build-net.yml` | Centralized build orchestration that creates one deployment artifact. |
+| **Reusable build unit** | `ADO Example/template-repo/build/net/net-build-steps.yml` | `GitHub Example/.github/actions/build/net/action.yml` | Encapsulated .NET restore, build, publish, and package behavior. |
+| **Reusable deploy orchestrator** | `ADO Example/template-repo/deploy/az-appservice/azure-appservice-deploy-stages.yml` | `GitHub Example/.github/workflows/deploy-az-appservice.yml` | Centralized dev → prod sequencing and per-environment orchestration. |
+| **Reusable deploy unit** | `ADO Example/template-repo/deploy/az-appservice/azure-appservice-deploy-step.yml` | `GitHub Example/.github/actions/deploy/az-appservice/action.yml` | **Direct equivalent**: ADO step template ↔ GitHub Composite Action. Both encapsulate per-app deployment logic. |
 
 ## Capability mapping
 
 | Capability | Azure DevOps Pattern | GitHub Actions Pattern |
 |---|---|---|
+| Build-before-deploy | `Build` stage; `Deploy_dev` declares `dependsOn: Build` | Reusable `build` job; reusable `deploy` job declares `needs: build` |
+| Immutable artifact promotion | One pipeline artifact consumed by all deployment stages | One workflow artifact consumed by all deployment jobs |
 | Multi-environment lifecycle | `stages` generated from environment objects | Multiple jobs (`deploy_dev`, `deploy_prod`) with conditional execution |
 | Execution order | `dependsOn` on generated stages | `needs` between jobs |
 | Reuse across repos | Template repo via `resources.repositories` + `template:` | Reusable workflow via `uses: org/repo/.github/workflows/...@ref` |
